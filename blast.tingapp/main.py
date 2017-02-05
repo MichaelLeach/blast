@@ -4,16 +4,52 @@ from random import randint
 
 # 320x240
 
+class Pos:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    
+class Size:
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
+class Entity:
+    def __init__(self, pos, size, color):
+        self.pos = pos
+        self.size = size
+        self.color = color
+    
+    def  draw(self):
+        screen.rectangle(xy=(self.pos.x, self.pos.y), size=(self.size.width, self.size.height), color=self.color)
+
+    def contains_pos(self, other_pos):
+        half_width = self.size.width * 0.5
+        half_height = self.size.height * 0.5
+        return other_pos.x > self.pos.x  - half_width and \
+                other_pos.x < self.pos.x + half_width and \
+                other_pos.y > self.pos.y - half_height and \
+                other_pos.y < self.pos.y + half_height
+
 class Game:
     def __init__(self):
-        self.player_pos = (160, 200)
-        self.left_touch_area = (0, 150, 90, 90)
-        self.right_touch_area = (230, 150, 90, 90)
-        self.bullets = [(160, 25), (160, 50), (160, 75), (160, 100), (160, 125), (160, 150), (160, 175)]
-        self.globe = { 'size' : 1, 'pos' : (100, 100), 'color' : 'blue' }
+        self.left_touch_area = Entity(Pos(45, 195), Size(90, 90), 'none')
+        self.right_touch_area = Entity(Pos(274, 195), Size(90, 90), 'none')
+        
+        self.player = Entity(Pos(160, 200), Size(30,30), (100,250,150))
+        
+        self.bullets = []
+        for i in range(1, 6):
+            bullet = Entity(Pos(160, i * 25), Size(5, 5), 'yellow')
+            self.bullets.append(bullet)
+        
+        self.globe = Entity(Pos(100, 100), Size(1,1), 'blue')
+        
         self.moving_left = False
         self.moving_right = False
+        
         self.score = 0
+        
         if 'high_score' in tingbot.app.settings:
             self.high_score = tingbot.app.settings['high_score']
         else:
@@ -21,67 +57,54 @@ class Game:
         
 game = Game()
 
-def contains_pos(rect, pos):
-    return pos[0] > rect[0] and pos[0] < rect[0] + rect[2] and pos[1] > rect[1] and pos[1] < rect[1] + rect[3]
-
-def colides(rect_1, rect_2):
-    return True
-
-
 @every(seconds=1.0/30)
 def loop():
     screen.fill(color='black')
     
     # grow globe
-    game.globe['size'] = game.globe['size'] + 2
-    if game.globe['size'] <= 50:
-        game.globe['color'] = 'blue'
+    new_size = game.globe.size.width + 2
+    game.globe.size.width =  new_size
+    game.globe.size.height = new_size
+    if new_size <= 50:
+        game.globe.color = 'blue'
     else:
-        game.globe['color'] = 'red'
+        game.globe.color = 'red'
     
     # move player
     if game.moving_left:
-        game.player_pos = (game.player_pos[0] - 10, game.player_pos[1])
+        game.player.pos.x = game.player.pos.x - 10
 
     if game.moving_right:
-        game.player_pos = (game.player_pos[0] + 10, game.player_pos[1])
+        game.player.pos.x = game.player.pos.x + 10
     
     # move bullets
-    for i in range(0, len(game.bullets)):
-        bullet = game.bullets[i]
-        y = bullet[1] - 10
-        x = bullet[0]
-        if y <= 0:
-            y += 175
-            x = game.player_pos[0]
-            
-        game.bullets[i] = (x, y)
-        
+    for bullet in game.bullets:
+        bullet.pos.y = bullet.pos.y - 10
+        if bullet.pos.y <= 0:
+            bullet.pos.y += 175
+            bullet.pos.x = game.player.pos.x
     
     # bullet collision
     for bullet in game.bullets:
-        if contains_pos((game.globe['pos'][0] - game.globe['size'] * 0.5,
-                         game.globe['pos'][1] - game.globe['size'] * 0.5, 
-                         game.globe['size'], 
-                         game.globe['size']), bullet):
-            game.score += 52 - game.globe['size']
+        if game.globe.contains_pos(bullet.pos):
+            game.score += 52 - game.globe.size.width
             if game.score < 0: game.score = 0
             if game.score > game.high_score:
                 game.high_score = game.score
                 tingbot.app.settings['high_score'] = game.high_score
 
-            game.globe['size'] = 1
-            game.globe['pos'] = (randint(40,280), randint(40, 140))
+            game.globe.size = Size(1, 1)
+            game.globe.pos = Pos(randint(40,280), randint(40, 140))
         
     #draw globe
-    screen.rectangle(xy=game.globe['pos'], size=(game.globe['size'], game.globe['size']), color=game.globe['color'])
-
+    game.globe.draw()
+    
     # draw bulltes
     for bullet in game.bullets:
-        screen.rectangle(xy=bullet, size=(5,5), color='yellow')
+        bullet.draw()
 
     # draw player
-    screen.rectangle(xy=game.player_pos, size=(30,30), color=(100,250,150))
+    game.player.draw()
     
     # draw hud
     screen.text('Score {0}'.format(game.score), color='white', xy=(5,5), align='topleft', font_size=15)
@@ -89,15 +112,15 @@ def loop():
 
 @touch()
 def on_touch(xy, action):
-            
     if action == 'up':
         game.moving_right = False
         game.moving_left = False
         
+    touch_pos = Pos(xy[0], xy[1])
     if action == 'down':
-        if contains_pos(game.right_touch_area, xy):
+        if game.right_touch_area.contains_pos(touch_pos):
             game.moving_right = True
-        if contains_pos(game.left_touch_area, xy):
+        if game.left_touch_area.contains_pos(touch_pos):
             game.moving_left = True
 
 @right_button.down
